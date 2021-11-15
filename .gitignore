@@ -1,0 +1,10 @@
+# IDE files
+.idea
+
+# Sensitive files
+.env
+config/db.conf
+
+# Personal files
+public/uploads/*
+!public/uploads/dps
