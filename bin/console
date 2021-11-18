@@ -1,0 +1,38 @@
+#!/usr/bin/env php
+<?php
+
+use Simfa\Framework\CLI\CLIApplication;
+
+/** our constants variables */
+
+/** colors */
+CONST RESET = "\e[0m";
+CONST RED = "\e[31m";
+CONST GREEN = "\e[32m";
+CONST YELLOW = "\e[33m";
+CONST BLUE = "\e[34m";
+CONST MAGENTA = "\e[35m";
+CONST CYAN = "\e[36m";
+CONST WHITE = "\e[37m";
+/** background colors */
+CONST B_RESET = "\e[0;1m";
+CONST B_RED = "\e[31;1m";
+CONST B_GREEN = "\e[32;1m";
+CONST B_YELLOW = "\e[33;1m";
+CONST B_BLUE = "\e[34;1m";
+CONST B_MAGENTA = "\e[35;1m";
+CONST B_CYAN = "\e[36;1m";
+CONST B_WHITE = "\e[37;1m";
+
+
+/** require autoloader */
+if (file_exists(dirname(__DIR__) . '/vendor/__autoload.php'))
+	require dirname(__DIR__) . '/vendor/__autoload.php';
+else
+	die("failed to load the autoloader\n");
+
+/** create new instance of cli application */
+$app = new CLIApplication(dirname(__DIR__), $argc, $argv);
+
+/** run our application */
+echo $app->run();
