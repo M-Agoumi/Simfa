@@ -53,9 +53,9 @@ class Form
 	 * @param string $label
 	 * @return Field
 	 */
-	public function field(Model $model, string $attribute, string $label = ''): Field
+	public function field(Model $model, string $attribute): Field
 	{
-		$this->field = new Field($model, $attribute, $label);
+		$this->field = new Field($model, $attribute);
 		return $this->field;
 	}
 

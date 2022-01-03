@@ -2,8 +2,7 @@
 
 namespace Simfa\Form;
 
-
-use models\Model;
+use Simfa\Model\Model;
 
 class Select
 {

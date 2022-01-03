@@ -3,8 +3,7 @@
 
 namespace Simfa\Form;
 
-
-use models\Model;
+use Simfa\Model\Model;
 
 class TextArea
 {
@@ -23,7 +22,7 @@ class TextArea
 
 	/**
 	 * TextArea constructor.
-	 * @param \models\Model $model
+	 * @param Model $model
 	 * @param string $attribute
 	 */
 	public function __construct(Model $model, string $attribute)
@@ -65,7 +64,7 @@ class TextArea
 			, !empty($this->holder) ? $this->holder : (!empty($this->label) ? $this->label : $this->attribute)
 			, $this->disabled
 			, $this->required
-			, $this->model->{$this->attribute}
+			, $this->model->{'get' . ucfirst($this->attribute)}()
 			, $this->model->getFirstError($this->attribute)
 		);
 	}

@@ -71,7 +71,7 @@ class Field
 		    , $this->class . ' ' . ($this->model->hasError($this->attribute) ? 'is-invalid' : '')
 		    , $this->attribute
 		    , $this->attribute
-		    , $this->model->{'get' . $this->attribute}()
+		    , $this->model->{'get' . ucfirst($this->attribute)}()
 		    , !empty($this->holder) ? $this->holder : $this->attribute
 		    , $this->disabled
 		    , $this->required
@@ -131,8 +131,8 @@ class Field
      */
 	public function default(string $default): Field
     {
-		if (!$this->model->{$this->attribute})
-			$this->model->{$this->attribute} = $default;
+		if (!$this->model->{'get' . ucfirst($this->attribute)}())
+			$this->model->{'set' . ucfirst($this->attribute)}($default);
 
 		return $this;
 	}

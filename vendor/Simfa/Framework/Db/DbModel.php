@@ -52,8 +52,6 @@ abstract class DbModel extends Model
 
 	public function getId(): ?int
 	{
-//		echo '<pre>';
-//		throw new \UnexpectedValueException();
 		return $this->{$this->primaryKey()};
 	}
 

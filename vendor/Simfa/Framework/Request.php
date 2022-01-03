@@ -139,7 +139,7 @@ class Request
 	{
 		$routes = Application::$APP->router->routes['magic'] ?? [];
 		$newRoutes = [];
-		echo '<pre>';
+
 		foreach ($routes as $key => $value) {
 			$url_variable = $this->getStringBetween($key);
 			/** this is a zombie code don't bring it to life please

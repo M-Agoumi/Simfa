@@ -13,7 +13,7 @@
 
 namespace Simfa\Action;
 
-use Simfa\Application;
+use Simfa\Framework\Application;
 use Simfa\Framework\Middleware\BaseMiddleware;
 use Simfa\Framework\Middleware\FirewallMiddleware;
 
@@ -50,14 +50,6 @@ abstract class Controller
         return $this->middlewares;
     }
 
-    /**
-	 * change the used layout in the request
-	 * @param string $string
-	 */
-	protected function setLayout(string $string)
-	{
-		$this->layout = $string;
-	}
 
 	public function registerMiddleware(BaseMiddleware $middleware)
     {

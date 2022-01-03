@@ -2,8 +2,7 @@
 
 namespace Simfa\Model;
 
-
-use Simfa\Db\DbModel;
+use Simfa\Framework\Db\DbModel;
 
 class Languages extends DBModel
 {
