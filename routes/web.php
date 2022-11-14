@@ -12,6 +12,3 @@
   * });
   *
   */
-Simfa\Framework\Router::get('/', [Controller\DefaultController::class, 'index']);
-Simfa\Framework\Router::request('/login', [Controller\DefaultController::class, 'login']);
-Simfa\Framework\Router::get('/logout', [Controller\DefaultController::class, 'logout']);
