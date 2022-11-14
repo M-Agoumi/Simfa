@@ -1,9 +1,18 @@
 <?php
 
-namespace vendor\FakeData;
+namespace FakeData;
 
-use vendor\FakeData\src\FakeData;
+use FakeData\src\FakeData;
+use Simfa\Framework\Db\DbModel;
 
+/**
+ * @method username(string $from)
+ * @method email(string $from)
+ * @method text(int $min = 5, int $max = null)
+ * @method slugify(string $slug)
+ * @method model($model)
+ * @method number(int $min = -2147483648, int $max = 2147483647) generate random number between min and max
+ */
 class FakeDataFactory extends FakeData
 {
 	private static ?FakeDataFactory $instance = null;

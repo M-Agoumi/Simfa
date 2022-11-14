@@ -14,6 +14,7 @@
 namespace Simfa\Action;
 
 use Simfa\Framework\Application;
+use Simfa\Framework\Db\DbModel;
 use Simfa\Framework\Middleware\BaseMiddleware;
 use Simfa\Framework\Middleware\FirewallMiddleware;
 
@@ -24,20 +25,22 @@ use Simfa\Framework\Middleware\FirewallMiddleware;
 
 abstract class Controller
 {
-
+	/**
+	 * @var string
+	 */
 	public string $action = '';
+
     /** @var BaseMiddleware[] */
 	protected array $middlewares = [];
 
-    /** adding this method to avoid typing it in every method in our controllers
-     * @param string $view
-     * @param array $params
-     * @param array $layParams
-     * @return false|string|string[]
-     */
-	public function render(string $view, array $params = [], array $layParams = [])
+	/** adding this method to avoid typing it in every method in our controllers
+	 * @param string $view
+	 * @param array $params
+	 * @return string
+	 */
+	public function render(string $view, array $params = []): string
 	{
-		return Application::$APP->view->renderView($view, $params, $layParams);
+		return Application::$APP->view->renderView($view, $params);
 	}
 
     /**
@@ -50,12 +53,22 @@ abstract class Controller
         return $this->middlewares;
     }
 
-
-	public function registerMiddleware(BaseMiddleware $middleware)
-    {
+	/**
+	 * @param BaseMiddleware $middleware
+	 * @return void
+	 */
+	public function registerMiddleware(BaseMiddleware $middleware): void
+	{
         $this->middlewares[] = $middleware;
     }
 
+	/**
+	 * @param string $to
+	 * @param string $subject
+	 * @param string $body
+	 * @param string $headers
+	 * @return bool
+	 */
 	public function mailer(string $to, string $subject, string $body, string $headers): bool
 	{
 		if (mail($to, $subject, $body, $headers))
@@ -64,21 +77,34 @@ abstract class Controller
 		return false;
 	}
 
-    public function mail($to, $subject ,$content, string $from = 'admin@camagru.io'):bool
+	/**
+	 * @param $to
+	 * @param $subject
+	 * @param $content
+	 * @param string $from
+	 * @param array $headers
+	 * @return bool
+	 */
+    public function mail($to, $subject ,$content, string $from = 'admin@simfa.io', $headers = []):bool
     {
-	    $headers = 'Content-type: text/html; charset=iso-8859-1' . "\r\n" .
-		    'From: ' . $from . "\r\n" .
-		    'Reply-To: reply@camagru.io' . "\r\n" .
+	    $header = 'Content-type: text/html; charset=iso-8859-1' . "\r\n";
+		$header .= 'From: ' . $from . "\r\n";
+	    $header .= 'Reply-To: '. $headers['reply_to'] ?? 'reply@simfa' . "\r\n" .
 		    'X-Mailer: PHP/' . phpversion();
 
     	if (is_array($content)) {
-    		$body = $this->render('mails/' . $content[0], $content[1], ['title' => $subject]);
+    		$body = $this->render('mails/' . $content[0], $content[1]);
 
-    		return $this->mailer($to, $subject, $body, $headers);
+    		return $this->mailer($to, $subject, $body, $header);
 	    } else
-    	    return $this->mailer($to, $subject, $content, $headers);
+    	    return $this->mailer($to, $subject, $content, $header);
     }
 
+	/** get a slug url
+	 * @param $text
+	 * @param string $divider
+	 * @return string
+	 */
 	public function slugify($text, string $divider = '-'): string
 	{
 		// replace non letter or digits by divider
@@ -106,8 +132,22 @@ abstract class Controller
 		return $text;
 	}
 
-	protected function json($value)
+	/** return a json request, don't call if request is already sent, use json_encode directly then
+	 * @param $value
+	 * @return bool|string
+	 */
+	protected function json($value): bool|string
 	{
+		header('Content-Type: application/json');
+
 		return json_encode($value);
+	}
+
+	/** get the authenticated user or null instead
+	 * @return DbModel|null
+	 */
+	protected function getAuthenticatedUser(): ?DbModel
+	{
+		return Application::$APP->user;
 	}
 }
