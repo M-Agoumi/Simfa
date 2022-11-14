@@ -3,37 +3,45 @@
 
 namespace Simfa\Model;
 
-
 use Model\User;
+use Simfa\Framework\Db\DbModel;
 
-class UserToken extends \Simfa\Framework\Db\DbModel
+/**
+ * @method getToken()
+ */
+class UserToken extends DbModel
 {
-	public ?int $id = null;
+	public ?int $entityID = null;
 	public ?User $user = null;
 	public ?string $token = null;
 	public ?int $used = null;
 
 	protected static string $tableName =  'user_token';
 
-	protected static string $primaryKey = 'id';
-
 	/**
 	 * @inheritDoc
 	 */
 	public function rules(): array
 	{
-		// TODO: Implement rules() method.
 		return [];
 	}
 
+	/**
+	 * @return string[]
+	 */
 	public function relationships(): array
 	{
 		return ['user' => User::class];
 	}
 
+	/**
+	 * @param int $id
+	 * @return void
+	 */
 	public function setUser(int $id)
 	{
+		/** todo rework this shit, it depends on class it from the app not the framework, which is wrong */
 		if ($id !== null)
-			$this->user = User::findOne(['id' => $id]);
+			$this->user = \Model\User::findOne(['entityID' => $id]);
 	}
 }
