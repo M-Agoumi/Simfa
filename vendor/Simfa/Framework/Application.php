@@ -13,37 +13,39 @@
 
 namespace Simfa\Framework;
 
-use Simfa\Action\Controller;
-use Simfa\Framework\Db\Database;
-use Simfa\Framework\Db\DbModel;
 use Exception;
-use Simfa\Model\Languages;
-use Simfa\Model\Preferences;
+use Simfa\Model\Language;
+use Simfa\Model\Preference;
+use Simfa\Action\Controller;
+use Simfa\Framework\Db\DbModel;
+use Simfa\Framework\Db\Database;
 
 /**
  * Class Application don't forget to include your user class
  */
 class Application
 {
-	public static string $ROOT_DIR;
-	public static Application $APP;
-	public static array $ENV;
-	public string $userCLass;
-	public Database $db;
-	public ?Router $router = null;
-	public ?Request $request = null;
-	public ?Response $response = null;
-	public ?controller $controller = null;
-	public ?Session $session = null;
-	public ?Preferences $preferences = null;
-	public ?DbModel $user;
-	public ?View $view;
-	public ?Helper $helper = null;
-	public ?Cookie $cookie = null;
-	public ?Catcher $catcher = null;
-	public array $MainLang = [];
-	protected array $fallbackLang = [];
-	public string $interface;
+	public static string        $ROOT_DIR;
+	public static Application   $APP;
+	public static array         $ENV;
+	public string               $userCLass;
+	public Database             $db;
+	public ?Router              $router = null;
+	public ?Request             $request = null;
+	public ?Response            $response = null;
+	public ?controller          $controller = null;
+	public ?Session             $session = null;
+	public ?Preference          $preferences = null;
+	public ?DbModel             $user;
+	public ?View                $view;
+	public ?Helper              $helper = null;
+	public ?Cookie              $cookie = null;
+	public ?Catcher             $catcher = null;
+	public ?Injector            $injector = null;
+	public array                $MainLang = [];
+	protected array             $fallbackLang = [];
+	public string               $interface;
+	private ?array              $appConfig = null;
 
 	/**
 	 * Application constructor.
@@ -52,24 +54,25 @@ class Application
 
 	public function __construct(string $rootPath, string $appInterface = 'web')
 	{
-		self::$ROOT_DIR = $rootPath;
-		self::$APP = $this;
-		self::$ENV = $this->getDotEnv();
-		$this->catcher = New Catcher();
-		$this->interface = $appInterface;
-		$this->userCLass = self::getEnvValue('userClass') ?? 'models\User';
-		$this->request = New Request();
-		$this->response = New Response();
-		$this->db = New Database($this->getDatabaseConfig());
-		$this->session = New Session();
-		$this->user = self::getUser();
-		$this->router = New Router($this->request, $this->response, $appInterface);
-		$this->view = New View();
-		$this->helper = New Helper();
-		$this->cookie = New Cookie();
-		$this->preferences = $this->user ? Preferences::getPerf($this->user->getId()) : null;
-		$lang = $this->setLang();
-		$this->MainLang = $lang[0];
+		self::$ROOT_DIR     = $rootPath;
+		self::$APP          = $this;
+		self::$ENV          = $this->getDotEnv();
+		$this->interface    = $appInterface;
+		$this->injector     = new Injector();
+		$this->catcher      = new Catcher();
+		$this->userCLass    = self::getEnvValue('USER_CLASS') ?? 'Model\User';
+		$this->request      = New Request();
+		$this->response     = New Response();
+		$this->view         = New View();
+		$this->db           = New Database($this->getDatabaseConfig());
+		$this->session      = New Session();
+		$this->user         = self::getUser();
+		$this->router       = New Router($this->request, $this->response, $appInterface);
+		$this->helper       = Helper::initHelper();
+		$this->cookie       = new Cookie();
+		$this->preferences  = $this->user ? Preference::getPerf($this->user->getId()) : null;
+		$lang               = $this->setLang();
+		$this->MainLang     = $lang[0];
 		$this->fallbackLang = $lang[1];
 	}
 
@@ -83,10 +86,8 @@ class Application
 		if ($primaryValue) {
 			$primaryKey = self::$APP->userCLass::primaryKey();
 			$user = self::$APP->userCLass::findOne([$primaryKey =>  $primaryValue]);
-			$user->ip_address = Application::$APP->request->getUserIpAddress();
-			$user->update();
-
-			return $user;
+			if ($user->getId())
+				return $user;
 		}
 
 		return NULL;
@@ -110,9 +111,29 @@ class Application
 	}
 
 	/**
+	 * @param string $string
+	 * @param string $key
+	 * @return mixed
+	 * @throws Exception
+	 */
+	public static function getAppConfig(string $string, string $key = ''): mixed
+	{
+		if (!self::$APP->appConfig){
+			if (file_exists(Application::$ROOT_DIR . '/config/config.php'))
+				self::$APP->appConfig = include(Application::$ROOT_DIR . '/config/config.php');
+			else
+				throw new Exception('missing config/config.php file', 501);
+		}
+
+		if ($key)
+			return self::$APP->appConfig[$string][$key] ?? null;
+		return self::$APP->appConfig[$string] ?? null;
+	}
+
+	/**
 	 * calling the resolver method to handle our request
 	 */
-	public function run()
+	public function run(): void
 	{
 	    try {
 	    	$output = $this->router->resolve();
@@ -120,7 +141,7 @@ class Application
                 echo $output;
 	    	elseif(is_bool($output))
 			    echo render('messages.default', ['title' => 'empty page', 'value' => $output]);
-	    	else
+			elseif (!is_null($output))
 	    		var_dump($output);
         } catch (Exception $e) {
 	    	$this->catcher->catch($e);
@@ -160,8 +181,11 @@ class Application
 	 */
 	public static function getConfig(string $file)
 	{
-		return file_exists(self::$ROOT_DIR . "/config/" . $file . ".conf") ?
-			parse_ini_file(self::$ROOT_DIR . "/config/" . $file . ".conf", true) : [];
+		if (file_exists(self::$ROOT_DIR . "/config/" . $file . ".conf"))
+			return parse_ini_file(self::$ROOT_DIR . "/config/" . $file . ".conf", true);
+		if (file_exists(self::$ROOT_DIR . "/config/" . $file . ".php"))
+			return include(Application::$ROOT_DIR . '/config/'. $file . '.php');
+		return  [];
 	}
 
     /**
@@ -184,25 +208,25 @@ class Application
 
 	    if ($this->session->get('lang_main') && $this->session->get('lang_fb')) {
 	    	/** already in session just get em */
-		    array_push($lang, include self::$ROOT_DIR . '/translation/' . $this->session->get('lang_main') . '.lang.php');
-		    array_push($lang, include self::$ROOT_DIR . '/translation/' . $this->session->get('lang_fb') . '.lang.php');
+		    $lang[] = include self::$ROOT_DIR . '/translation/' . $this->session->get('lang_main') . '.lang.php';
+		    $lang[] = include self::$ROOT_DIR . '/translation/' . $this->session->get('lang_fb') . '.lang.php';
 	    } else {
 	    	/** not in session check database */
-		    if ($this->preferences && $this->preferences->id) {
-		    	$language = Languages::getLang($this->preferences->language)->language;
+		    if ($this->preferences && $this->preferences->entityID) {
+		    	$language = Language::getLang($this->preferences->language)->language;
 		    	Application::$APP->session->set('lang_main', $language);
-			    array_push($lang, include self::$ROOT_DIR . '/translation/' . $language. '.lang.php');
+			    $lang[] = include self::$ROOT_DIR . '/translation/' . $language . '.lang.php';
 			    if ($lang != $config['fallback_language']) {
 				    Application::$APP->session->set('lang_fb', $config['fallback_language']);
-				    array_push($lang, include self::$ROOT_DIR . '/translation/' . $config['fallback_language'] . '.lang.php');
+				    $lang[] = include self::$ROOT_DIR . '/translation/' . $config['fallback_language'] . '.lang.php';
 			    } else {
 				    Application::$APP->session->set('lang_fb', $config['main_language']);
-				    array_push($lang, include self::$ROOT_DIR . '/translation/' . $config['main_language'] . '.lang.php');
+				    $lang[] = include self::$ROOT_DIR . '/translation/' . $config['main_language'] . '.lang.php';
 			    }
 		    } else {
 		    	/** not in database take default setting from config file */
-		        array_push($lang, include self::$ROOT_DIR . '/translation/' . $config['main_language'] . '.lang.php');
-		        array_push($lang, include self::$ROOT_DIR . '/translation/' . $config['fallback_language'] . '.lang.php');
+		        $lang[] = include self::$ROOT_DIR . '/translation/' . $config['main_language'] . '.lang.php';
+		        $lang[] = include self::$ROOT_DIR . '/translation/' . $config['fallback_language'] . '.lang.php';
 		    }
 	    }
 
@@ -216,24 +240,32 @@ class Application
 	 */
 	public static function path(string $name, $var = null): string
     {
-    	return self::$APP->router->path($name, $var);
+	    try {
+	    	return self::$APP->router->path($name, $var);
+	    } catch (Exception $e) {
+			Application::$APP->catcher->catch($e);
+	    }
+		return '';
     }
 
 	/** save our logged user to the session
 	 * @param DbModel $user
-	 * @param string $ref
+	 * @param string $redirect
 	 */
-	public function login(DbModel $user, string $ref)
+	public function login(DbModel $user, string $redirect): void
 	{
 		$this->user = $user;
 		$primaryKey = 'get' . ucfirst($user->primaryKey());
 		$primaryValue = $user->{$primaryKey}();
 		$this->session->set('user', $primaryValue);
-		$this->response->redirect($ref);
+		if (str_starts_with($redirect, '/'))
+			$this->response->redirect(self::getEnvValue('URL') . $redirect);
+		$this->response->redirect(self::getEnvValue('URL') . '/' . $redirect);
 	}
 
 	/**
 	 * @param string $redirect to the last page the user was in
+	 * @throws Exception
 	 */
 	public static function logout(string $redirect = '/')
 	{
@@ -243,6 +275,6 @@ class Application
 		Application::$APP->session->remove('user');
 		Application::$APP->cookie->unsetCookie('user_tk');
 
-		Application::$APP->response->redirect($redirect);
+		Application::$APP->response->redirect(self::getEnvValue('URL') . $redirect);
 	}
 }

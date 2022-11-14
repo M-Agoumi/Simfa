@@ -17,10 +17,12 @@ class Catcher
 	{
 		$this->app->response->setStatusCode($e->getCode());
 
-		if ($this->app->interface != 'api')
-			$this->webLog($e);
+		if ($this->app->interface == 'API')
+			return $this->apiLog($e);
+		elseif ($this->app->interface == 'CLI')
+			$this->cliLog($e);
 		else
-			$this->apiLog($e);
+			$this->webLog($e);
 	}
 
 	private function webLog(Exception $e)
@@ -44,18 +46,39 @@ class Catcher
 			$message = ob_get_clean();
 		}
 
-		if ($this->app->getDotEnv()['env'] != 'dev') {
+		if ($this->app->getDotEnv()['ENV'] != 'dev') {
 			$codeView = 'error/__' . $e->getCode();
 			if (file_exists(Application::$ROOT_DIR . '/views/' . $codeView . '.gaster.php'))
 				echo $this->app->view->renderView('error/__' . $e->getCode(), ['e' => $e, 'title' => $e->getCode()]);
+			else{
+				echo $this->app->view->renderView('error/__500', [
+					'title' => '500 Internal Server Error',
+					'errorCode' => $this->getErrorCode($e->getCode())
+				]);
+
+			}
+		} else {
+			if (in_array($e->getCode(), ['404', '500', '403']))
+				echo $this->app->view->renderView('error/__' . $e->getCode(), ['e' => $e, 'title' => $e->getCode()]);
 			else
-				echo $this->app->view->renderView('error/__500', ['title' => '500 Internal Server Error']);
-		} else
-			echo $this->app->view->renderView('error/__error', ['e' => $e, ['title' => $e->getCode()]]);
+				echo $this->app->view->renderView('error/__error', ['e' => $e, 'title' => $e->getCode()]);
+		}
 	}
 
 	private function apiLog(Exception $e)
 	{
-		echo $e->getCode();
+		return $e->getCode();
+	}
+
+	private function getErrorCode($errorCode)
+	{
+		$errorCodes = Application::getConfig('errorsCodeMapping');
+		return $errorCodes[$errorCode] ?? 500;
+	}
+
+	private function cliLog(Exception $e)
+	{
+		echo $e->getCode() . PHP_EOL . PHP_EOL;
+		echo $e->getTraceAsString() . PHP_EOL;
 	}
 }

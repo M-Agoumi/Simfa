@@ -19,9 +19,14 @@ use \PDOException;
 
 class Database
 {
-	
+	/**
+	 * @var PDO
+	 */
 	public PDO $pdo;
-	
+
+	/**
+	 * @param array $config
+	 */
 	public function __construct(array $config)
 	{
 		$dsn = $config['DB_DSN'] ?? 'mysql:host=127.0.0.1;port=3306;dbname=camagru';
@@ -33,13 +38,7 @@ class Database
 			$this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 		} catch(PDOException $e){
 			APPLICATION::$APP->response->setStatusCode(500);
-			if (Application::$ENV['env'] == 'dev')
-				 die ($e->getMessage() . PHP_EOL); // todo handle this one nicely (add a backtrack)
-			else
-				echo APPLICATION::$APP->view->renderView('error/__500', [ // todo this is not working
-					"title" => "500 Internal Server Error",
-					"errorCode" => "00001c"
-				]);
+		    die(APPLICATION::$APP->catcher->catch($e));
 		}
 	}
 
@@ -52,10 +51,12 @@ class Database
 		$appliedMigrations = $this->getAppliedMigrations();
 
 		$newMigrations = [];
+		$currentMigration = '';
 		$files = scandir(Application::$ROOT_DIR.'/migrations');
 		$toApplyMigrations = array_diff($files, $appliedMigrations);
 		try {
 			foreach ($toApplyMigrations as $migration) {
+				$currentMigration = $migration;
 				if ($migration == '.' || $migration == '..')
 					continue ;
 				require_once Application::$ROOT_DIR. "/migrations//".$migration;
@@ -69,9 +70,10 @@ class Database
 		} catch (Exception $e) {
 			if (!empty($newMigrations))
 				$this->saveMigrations($newMigrations);
-			echo "applying migration failed after " . $newMigrations[count($newMigrations) - 1] . PHP_EOL;
+			echo "applying migration failed after " . ($newMigrations[count($newMigrations) - 1] ?? $currentMigration) . PHP_EOL;
 			print_r($e);
 			echo PHP_EOL;
+			$this->saveMigrations($newMigrations);
 		}
 
 		if (!empty($newMigrations)) 
@@ -85,7 +87,7 @@ class Database
      */
 	public function createMigrationsTable()
 	{
-		$this->pdo->exec("CREATE TABLE IF NOT EXISTS migrations(
+		$this->pdo->exec("CREATE TABLE IF NOT EXISTS migration(
 			id INT AUTO_INCREMENT PRIMARY KEY,
 			migration VARCHAR(255),
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -98,16 +100,20 @@ class Database
      */
     public function getAppliedMigrations(): array
     {
-		$statement = $this->pdo->prepare("SELECT migration FROM migrations");
+		$statement = $this->pdo->prepare("SELECT migration FROM migration");
 		$statement->execute();
 
 		return $statement->fetchAll(PDO::FETCH_COLUMN);
 	}
 
-	public function saveMigrations(array $migrations)
+	/**
+	 * @param array $migrations
+	 * @return void
+	 */
+	public function saveMigrations(array $migrations): void
 	{
 		$str = implode(', ', array_map(fn($m) => "('$m')", $migrations));
-		$statement = $this->pdo->prepare("INSERT INTO migrations(migration) VALUES
+		$statement = $this->pdo->prepare("INSERT INTO migration(migration) VALUES
 			$str
 		");
 		$statement->execute();

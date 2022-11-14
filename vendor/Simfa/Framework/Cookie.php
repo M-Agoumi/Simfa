@@ -12,7 +12,7 @@ class Cookie
 	public function __construct()
 	{
 		/** set test cookie */
-		setcookie('cookies_active', '1',['path' => '/', 'httponly' => false, 'secure' => false]);
+		setcookie('cookies_active', '1',['path' => '/', 'httponly' => false, 'secure' => false, 'samesite' => 'Strict']);
 
 		/** check if user is logged save him in cookies */
 		$userToken = New UserToken();
@@ -48,11 +48,11 @@ class Cookie
 		}
 	}
 
-	public function set(string $key, string $value, int $expires = null): bool
+	public function set(string $key, string $value, int $expires = null, string $sameSite = 'strict'): bool
 	{
 		if ($expires === 0)
 			$expires = time() + 3600;
-		return (setcookie($key, $value, ['expires' => $expires, 'path' => '/', 'httponly' => TRUE, 'secure' => false]));
+		return (setcookie($key, $value, ['expires' => $expires, 'path' => '/', 'samesite' => $sameSite, 'httponly' => TRUE, 'secure' => false]));
 	}
 
 	public function unsetCookie(string $key)

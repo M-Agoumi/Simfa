@@ -1,4 +1,16 @@
 <?php
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   Migrate.php                                        :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: magoumi <magoumi@student.1337.ma>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2022/02/6 18:39:13 by magoumi            #+#    #+#             */
+/*   Updated: 2022/02/6 18:39:13 by magoumi           ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 
 namespace Simfa\Framework\CLI\Commands;
 
@@ -8,13 +20,13 @@ use Simfa\Framework\CLI\CLIApplication;
 use PDO;
 use PDOException;
 
-class Migrate extends BaseCommand implements \Simfa\Framework\CLI\BaseCommandInterface
+class Migrate extends BaseCommand
 {
 
-	public function __construct()
-	{
-		self::$command = 'migrate';
-	}
+	/**
+	 * @var string
+	 */
+	protected static string $command = 'migrate';
 
 
 	/** create database using our DSN connection [config/db.conf]
@@ -57,7 +69,7 @@ class Migrate extends BaseCommand implements \Simfa\Framework\CLI\BaseCommandInt
 	 */
 	public function migrate()
 	{
-		$app = new Application(dirname($_SERVER['_'], 2));
+		$app = CLIApplication::$CLI_APP->getApp();
 		$app->db->applyMigrations();
 	}
 
@@ -66,8 +78,18 @@ class Migrate extends BaseCommand implements \Simfa\Framework\CLI\BaseCommandInt
 	 */
 	public function down()
 	{
-		$app = new Application(dirname($_SERVER['_'], 2));
-		$app->db->downMigrations(intval(CLIApplication::$app->argv[1] ?? 0));
+		$app = CLIApplication::$CLI_APP->getApp();
+		$app->db->downMigrations(intval(CLIApplication::$CLI_APP->argv[1] ?? 0));
+	}
+
+	/**
+	 * get clean database
+	 * @return void
+	 */
+	public function purge()
+	{
+		$this->down();
+		$this->migrate();
 	}
 
 	/**
@@ -75,8 +97,8 @@ class Migrate extends BaseCommand implements \Simfa\Framework\CLI\BaseCommandInt
 	 * @return array|false|null
 	 */
 	private function getDatabaseConfig() {
-		return file_exists(CLIApplication::$app->root . "/../config/db.conf") ?
-			parse_ini_file(CLIApplication::$app->root . "/../config/db.conf") : NULL;
+		return file_exists(CLIApplication::$ROOT_DIR . "/config/db.conf") ?
+			parse_ini_file(CLIApplication::$ROOT_DIR . "/config/db.conf") : NULL;
 	}
 
 	/**
@@ -113,15 +135,15 @@ class Migrate extends BaseCommand implements \Simfa\Framework\CLI\BaseCommandInt
 		return implode(';', $config);
 	}
 
-	public static function helper(string $command = 'migrate'): string
+	public static function helper(): string
 	{
-		self::$command = $command;
 		$helperMessage  = RED . self::$command . RESET . PHP_EOL;
 		$helperMessage    .= self::printCommand("create") ."create the project ";
 		$helperMessage    .= "database if it doesn't not exist --database fetched from config file" . PHP_EOL;
 		$helperMessage    .= self::printCommand("migrate") . "to apply migration from the migrations folder" . PHP_EOL;
 		$helperMessage    .= self::printCommand("down") . "revert all migrations" . PHP_EOL;
-		$helperMessage    .= CYAN . "       n" . RESET . "\t\t\tAccepts number of migrations to revert (migrate:down N)[migrate:down 1]";
+		$helperMessage    .= CYAN . "        n" . RESET . "\t\t\tAccepts number of migrations to revert (migrate:down N)[migrate:down 1]" . PHP_EOL;
+		$helperMessage    .= self::printCommand("purge") . "purge all the tables";
 
 
 		return $helperMessage;

@@ -2,6 +2,10 @@
 
 namespace Simfa\Framework\CLI;
 
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use RegexIterator;
+use Simfa\Framework\Application;
 use Simfa\Framework\CLI\Commands\BaseCommands;
 use Simfa\Framework\CLI\Commands\Cache;
 use Simfa\Framework\CLI\Commands\Make;
@@ -11,10 +15,11 @@ use Simfa\Framework\CLI\Commands\Setup;
 
 class CLIApplication
 {
-	public static CLIApplication $app;
+	public static CLIApplication $CLI_APP;
+	public static ?Application $APP = null;
 	public int $argc;
 	public array $argv;
-	public string $root;
+	public static string $ROOT_DIR;
 	public array $commands;
 	public bool $quite = false;
 
@@ -25,15 +30,23 @@ class CLIApplication
 	 */
 	public function __construct(string $root, int $argc, array $argv)
 	{
-		self::$app = $this;
+		self::$CLI_APP = $this;
 		array_shift($argv);
 		$this->argc = $argc - 1;
 		$this->argv = $argv;
-		$this->root = $root . '/';
+		self::$ROOT_DIR = $root . '/';
 		$this->commands = $this->registerCommands();
 
 		if (PHP_SAPI !== 'cli')
 			die('bin/console must be run as a CLI application' . PHP_EOL);
+	}
+
+	public function getApp(): ?Application
+	{
+		if (!self::$APP)
+			self::$APP = new Application(self::$ROOT_DIR, 'CLI');
+
+		return self::$APP;
 	}
 
 	/** our App heart
@@ -106,13 +119,32 @@ class CLIApplication
 	 */
 	private function registerCommands():array
 	{
-		return [
+		$commands  = [
 			'cache'     => Cache::class,
 			'make'      => Make::class,
 			'migrate'   => Migrate::class,
 			'server'    => Server::class,
 			'setup'     => Setup::class
 		];
+
+		return array_merge($commands, $this->getCustomCommands());
+	}
+
+	private function getCustomCommands():array
+	{
+		$path = self::$ROOT_DIR . 'src/Command';
+
+		$allFiles = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path));
+		$phpFiles = new RegexIterator($allFiles, '/\.php$/');
+
+		$commands = [];
+		foreach ($phpFiles as $phpFile) {
+			$command        = $phpFile->getBasename('.' . $phpFile->getExtension());
+			$commandClass   = '\Command\\' . $command;
+			$commands[strtolower($command)] = $commandClass;
+		}
+
+		return $commands;
 	}
 
 	/**

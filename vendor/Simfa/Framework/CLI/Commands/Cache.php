@@ -3,17 +3,16 @@
 namespace Simfa\Framework\CLI\Commands;
 
 use Simfa\Framework\CLI\BaseCommand;
-use Simfa\Framework\CLI\BaseCommandInterface;
 use Simfa\Framework\CLI\CLIApplication;
 use DirectoryIterator;
 
-class Cache extends BaseCommand implements BaseCommandInterface
+class Cache extends BaseCommand
 {
 
-	public function __construct()
-	{
-		self::$command = 'cache';
-	}
+	/**
+	 * @var string
+	 */
+	protected static string $command = 'cache';
 
 	/**
 	 * @param array $params
@@ -21,7 +20,7 @@ class Cache extends BaseCommand implements BaseCommandInterface
 	 */
 	public function clear(array $params = []): string
 	{
-		$path = CLIApplication::$app->root . 'var/cache/gaster';
+		$path = CLIApplication::$ROOT_DIR . 'var/cache/gaster';
 		$files = new DirectoryIterator($path);
 
 		/** delete template engine cache files */
@@ -38,9 +37,8 @@ class Cache extends BaseCommand implements BaseCommandInterface
 		return '';
 	}
 
-	static function helper($command = 'cache'): string
+	static function helper(): string
 	{
-		self::$command = $command;
 		$helperMessage  = RED . self::$command . RESET . PHP_EOL;
 		$helperMessage .= self::printCommand('clear') . "clear all cache" . PHP_EOL;
 		$helperMessage .= CYAN ."     -v --visual" . RESET . "\t\tprint deleted files";

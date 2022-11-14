@@ -5,67 +5,145 @@ namespace Simfa\Framework;
 
 
 use DirectoryIterator;
+use Exception;
 
 class View
 {
 
-	public ?string $rootDir = null;
+	/**
+	 * @var string|null
+	 */
+	private ?string $rootDir = null;
 
-	public function renderView(string $view, $params = [])
+	/**
+	 * @var bool|mixed|null
+	 */
+	private ?bool $isCacheEnabled;
+
+	/**
+	 * to know if it's a normal view file or system view file
+	 * @var bool
+	 */
+	private bool $systemCall = false;
+
+	/**
+	 * init $isCacheEnabled from config/App.php
+	 */
+	public function __construct()
 	{
-		$this->rootDir = Application::$ROOT_DIR . '/';
-		$content = $this->getCacheContent($view, $params);
+		$config = Application::getAppConfig('view');
+		$this->isCacheEnabled = $config['cache'];
+	}
 
-		if (!$content)
-			$content = $this->setCacheContent($view, $params);
+
+	/**
+	 * @param string $view
+	 * @param array $params
+	 * @param bool $return
+	 * @return string|null
+	 */
+	public function renderView(string $view, array $params = [], bool $return = false): ?string
+	{
+		$content = '';
+		try {
+			$this->rootDir = Application::$ROOT_DIR . '/';
+			if (!$this->isCacheEnabled)
+				return $this->setCacheContent($view, $params, true);
+			try {
+				$content = $this->getCacheContent($view, $params);
+			} catch (Exception $e) {
+				return $this->setCacheContent($view, $params, true);
+			}
+
+			if (!$content)
+				$content = $this->setCacheContent($view, $params, $return);
+		} catch (Exception $e) {
+			Application::$APP->catcher->catch($e);
+		}
 
 		return $content;
 	}
 
+	/**
+	 * @param string $view
+	 * @param array $params
+	 * @param bool $return
+	 * @return string|null
+	 * @throws Exception
+	 */
+	public function renderViewSystem(string $view, array $params = [], bool $return = false): ?string
+	{
+		$this->systemCall = true;
+
+		return $this->renderView($view, $params, $return);
+	}
+
+	/**
+	 * @throws Exception
+	 */
 	private function getCacheContent(string $view, $params): ?string
 	{
 		/** retrieve the original file */
-		$srcFile = $this->rootDir . 'views/templates/' . str_replace('.', '/', $view ) . '.gaster.php';
+		if ($this->systemCall)
+			$srcFile = $this->rootDir . 'views/' . str_replace('.', '/', $view ) . '.gaster.php';
+		else
+			$srcFile = $this->rootDir . 'views/templates/' . str_replace('.', '/', $view ) . '.gaster.php';
 		if (file_exists($srcFile))
 			$hash = md5_file($srcFile);
 		else
-			die($srcFile . ' is not found anymore');
+			throw new Exception($srcFile . ' is not found anymore');
 		$file = $this->rootDir . 'var/cache/gaster/' . str_replace('/', '.', $view ) . '.endl.' . $hash . '.php';
 
 		if (file_exists($file)) {
-			foreach ($params as $key => $param) {
-				$$key = $param;
-			}
+			if (is_readable($file)) {
+				foreach ($params as $key => $param) {
+					$$key = $param;
+				}
 
-			ob_start();
-			include $file;
+				ob_start();
+				include $file;
 
-			return ob_get_clean();
+				return ob_get_clean();
+			} else
+				throw new Exception('permission denied to cached file');
 		}
 
 		return false;
 	}
 
-	private function setCacheContent(string $view, $params)
+	/**
+	 * @throws Exception
+	 */
+	private function setCacheContent(string $view, array $params, bool $return = false): ?string
 	{
 		$view = str_replace('.', '/', $view);
-		$file = $this->rootDir . 'views/templates/' . $view . '.gaster.php';
+		if ($this->systemCall)
+			$file = $this->rootDir . 'views/' . $view . '.gaster.php';
+		else
+			$file = $this->rootDir . 'views/templates/' . $view . '.gaster.php';
 
 		/** load view from the file */
 		if (file_exists($file))
-			return $this->renderOnlyView([$file, $view], $params);
-		else
-			die("view file not found: " . $view);
+			return $this->renderOnlyView([$file, $view], $params, $return);
+
+		throw new Exception('view file not found: ' . $view);
 	}
 
-	private function renderOnlyView($view, $params)
+	/**
+	 * @throws Exception
+	 */
+	private function renderOnlyView($view, array $params, bool $return): ?string
 	{
 		$content = file_get_contents($view[0]);
 
 		$content = $this->preprocessContent($content);
-		$this->cacheContent($view, $content);
 
-		return $this->renderView(str_replace('/', '.', $view[1]), $params);
+		if (!$return) {
+			$this->cacheContent($view, $content);
+			return $this->renderView(str_replace('/', '.', $view[1]), $params);
+		}
+
+		return $this->renderProcessedData($content, $params);
 	}
 
 	private function preprocessContent($content)
@@ -110,14 +188,14 @@ class View
 			$content = $this->str_replace_first('@endif', '<?php endif; ?>', $content);
 		}
 
+		/** look for csrf tags */
+		$content = str_replace('@csrf', '<?= \Simfa\Framework\Application::$APP->session->getCsrf() ?>', $content);
+
 		/** merge layout with the view and return the result */
 		$content = $this->layoutContentMerge($layout, $content);
 
-		/** get include files */
-		$content = $this->getIncludeFiles($content);
-
-		/** return our final masterpiece */
-		return $content;
+		/** get include files and return our final masterpiece */
+		return $this->getIncludeFiles($content);
 	}
 
 	private function getIncludeFiles(string $content): string
@@ -213,7 +291,10 @@ class View
 
 	private function cacheContent($view, $content)
 	{
-		$originalFile = $this->rootDir . 'views/templates/' . $view[1] . '.gaster.php';
+		if ($this->systemCall)
+			$originalFile = $this->rootDir . 'views/' . $view[1] . '.gaster.php';
+		else
+			$originalFile = $this->rootDir . 'views/templates/' . $view[1] . '.gaster.php';
 		$view = str_replace('/', '.', $view[1]);
 		$originalHash = md5_file($originalFile);
 
@@ -229,7 +310,7 @@ class View
 
 		/** create cache file */
 		$cacheFileName = $this->rootDir . 'var/cache/gaster/' . $view . '.endl.' . $originalHash . '.php';
-		$cachedFile = fopen($cacheFileName, "w");
+		$cachedFile = fopen($cacheFileName, "w") or die('could not open cache file for writing');
 
 		/** write content to the file */
 		fwrite($cachedFile, $content);
@@ -249,13 +330,24 @@ class View
 
 	public function asset(string $link): string
 	{
-		$protocol = Application::getEnvValue('secure') ? 'https://' : 'http://';
-		$appUrl = Application::getEnvValue('appURL');
+		$protocol = Application::getEnvValue('SECURE') ? 'https://' : 'http://';
+		$appUrl = Application::getEnvValue('APP_URL');
 		$appPort = Application::$APP->request->port();
 
 		$asset = $protocol . $appUrl;
 		$asset .= $appPort ? ":" . $appPort : '';
 
 		return $asset . "/" . $link;
+	}
+
+	private function renderProcessedData(string $content, $params): ?string
+	{
+		foreach ($params as $key => $param) {
+			$$key = $param;
+		}
+		ob_start();
+		eval('?>' . $content . '<?php');
+
+		return ob_get_clean();
 	}
 }

@@ -38,7 +38,7 @@ abstract class DbModel extends Model
 	/**
 	 * framework properties that aren't database table attributes
 	 */
-	private static array $privateProperties = ['primaryKey', 'tableName', 'nonAttributes', 'protected' , 'errors'];
+	private static array $privateProperties = ['primaryKey', 'tableName', 'nonAttributes', 'protected' , 'errors', 'queryBuilder'];
 
 	/**
 	 * child properties that aren't database table attributes
@@ -49,30 +49,37 @@ abstract class DbModel extends Model
 	 * @var array $protected properties from public shows like api
 	 */
 	protected static array $protected = [];
+	/**
+	 * @var QueryBuilder
+	 */
+	private QueryBuilder $queryBuilder;
 
+	/**
+	 * @return int|null
+	 */
 	public function getId(): ?int
 	{
 		return $this->{$this->primaryKey()};
 	}
 
 	/**
+	 * @param $id
+	 * @return void
+	 */
+	public function setId($id): void
+	{
+		$this->{$this->primaryKey()} = $id;
+	}
+
+	/**
 	 * get table name
 	 */
-	protected function tableName(): string
+	protected static function tableName(): string
 	{
-		$static = !(isset($this) && get_class($this) == __CLASS__);
+		if (static::$tableName != '')
+			return static::$tableName;
 
-		if ($static) {
-			if (static::$tableName != '')
-				return static::$tableName;
-
-			return (lcfirst((new ReflectionClass(static::class))->getShortName()));
-		}
-
-		if ($this->tableName != '')
-			return $this->tableName;
-
-		return lcfirst((new ReflectionClass($this))->getShortName());
+		return (lcfirst((new ReflectionClass(static::class))->getShortName()));
 	}
 
 	/**
@@ -110,9 +117,15 @@ abstract class DbModel extends Model
 		$tableName = $this->tableName();
 		$attributes = $this->attributes();
 
+		if (!$this->getId())
+			if (($key = array_search(static::primaryKey(), $attributes)) !== false) {
+				unset($attributes[$key]);
+			}
+
 		$params = array_map(fn($m) => ":$m", $attributes);
+		$attrs = array_map(fn($m) => "`$m`", $attributes);
 		$statement = self::prepare(
-			"INSERT INTO $tableName (". implode(", ", $attributes) . ") value (
+			"INSERT INTO `$tableName` (". implode(", ", $attrs) . ") values (
 				" . implode(", ", $params) . ")"
 		);
 
@@ -145,42 +158,47 @@ abstract class DbModel extends Model
 	{
 		$tableName = $this->tableName();
 		$attributes = $this->attributes();
-		array_push($attributes, 'updated_at');
+		$attributes[] = 'updated_at';
 
-		$sql = "UPDATE $tableName SET ";
+		$sql = "UPDATE `$tableName` SET ";
 		$first = 1;
 		foreach ($attributes as $attr) {
 			if (!$first)
-				$sql .= ", " . $attr . " = :" . $attr;
+				$sql .= ', `' . $attr . '` = :' . $attr;
 			else {
-				$sql .= $attr . " = :" . $attr;
+				$sql .= '`' . $attr . '` = :' . $attr;
 				$first = 0;
 			}
 		}
 
-		$sql .= " WHERE " . $this->primaryKey() . "=" . $this->{$this->primaryKey()} . ";";
-
+		$sql .= ' WHERE ' . $this->primaryKey() . ' = ' . $this->{$this->primaryKey()} . ';';
 		$statement = self::prepare($sql);
 
 		foreach ($attributes as $attribute) {
 			if ($attribute == 'updated_at')
 				$statement->bindValue(":$attribute", date('Y-m-d H:i:s', time()));
-			else
-				$statement->bindValue(":$attribute", $this->{$attribute});
+			elseif ($attribute == 'created_at' && !$this->{$attribute})
+				$statement->bindValue(":$attribute", date('Y-m-d H:i:s', time()));
+			else {
+				if ($this->{$attribute} instanceof DbModel && $this->{$attribute} == '-1'){
+					$statement->bindValue(":$attribute", null);}
+				else
+					$statement->bindValue(":$attribute", $this->{$attribute});
+			}
 		}
-
 		$this->updated_at = date('Y-m-d H:i:s', time());
 
 		return $statement->execute();
 	}
 
-    /**
-     * @param $key
-     * @param $value
-     * @return false|Model
-     */
-    public function getOneBy($key, $value = null, $object = 1)
-    {
+	/**
+	 * @param $key
+	 * @param null $value
+	 * @param int $object
+	 * @return mixed
+	 */
+    public function getOneBy($key, $value = null, int $object = 1): mixed
+	{
         $tableName = $this->tableName();
 
         if ($value) {
@@ -189,7 +207,11 @@ abstract class DbModel extends Model
         } else {
         	$primary = $this->primaryKey();
         	$statement = self::prepare("SELECT * FROM $tableName WHERE $primary = :key");
-	        $statement->bindParam(":key", $key);
+			if ($key instanceof $this) {
+				$id = $key->getId();
+				$statement->bindParam(":key", $id);
+			} else
+	        	$statement->bindParam(":key", $key);
         }
 	    $statement->execute();
 
@@ -200,14 +222,15 @@ abstract class DbModel extends Model
 			        $relations = $this->relationships();
 			        foreach ($relations as $key => $value) {
 				        $model = new $value;
-				        $model->loadData($model->getOneBy($data[$key], '', false));
+						if ($data[$key])
+				        	$model->loadData($model->getOneBy($data[$key], '', false));
 				        $data[$key] = $model;
 			        }
 		        }
 
 		        $this->loadData($data);
 	        }
-            return $statement->fetchObject();
+            return $this;
         }
 
         return $statement->fetch(2);
@@ -218,7 +241,8 @@ abstract class DbModel extends Model
 		$tableName = static::tableName();
 		$attributes = array_keys($where);
 		$sql = implode(" AND " ,array_map(fn($attr) => "$attr = :$attr", $attributes));
-		$stmt = self::prepare("SELECT * FROM $tableName WHERE ". $sql);
+		$stmt = self::prepare("SELECT * FROM `$tableName` WHERE ". $sql);
+
 		foreach ($where as $key => $item) {
 			$stmt->bindValue(":$key", $item);
 		}
@@ -229,10 +253,12 @@ abstract class DbModel extends Model
 		$class = static::class;
 		$class = new $class();
 
+
 		if ($data) {
 			foreach ($relations as $key => $value) {
 				$model = new $value;
-				$model->loadData($model->getOneBy($data[$key], '', false));
+				if ($data[$key])
+					$model->loadData($model->getOneBy($data[$key], '', false));
 				$data[$key] = $model;
 
 			}
@@ -244,9 +270,12 @@ abstract class DbModel extends Model
 	}
 
 	/** get all records of a specific entity
-	 * @return mixed
+	 * @param string $limit
+	 * @param string $order
+	 * @return array|bool
 	 */
-	public function findAll(string $limit = '', string $order = 'ASC'){
+	public function findAll(string $limit = '', string $order = 'ASC'): array|bool
+	{
 		$tableName = static::tableName();
 		$limit = !empty($limit) ? 'limit ' . $limit : '';
 		$primary = static::primaryKey();
@@ -257,19 +286,35 @@ abstract class DbModel extends Model
 	}
 
 	/**
-	 * @param array $where
+	 * @param array $where where => ['column' => 'value we need', 'column_b' => 'value b']
+	 * 		the above example will be where `column` = 'value we need' and `column_b` = 'value b'
+	 * @param string $limit
 	 * @return array
 	 */
-	public function findAllBy(array $where, string $limit = '')
+	public function findAllBy(array $where, string $limit = ''): array
 	{
 		$tableName = static::tableName();
-		$attributes = array_keys($where);
 		$primary = static::primaryKey();
-		$sql = implode(" AND " ,array_map(fn($attr) => "$attr = :$attr", $attributes));
+		$sql = '';
+		foreach ($where as $criteria => $value) {
+			$sql .= $sql != '' ? ' and ' : '';
+			if (is_array($value)) {
+				foreach ($value as $key => $item) {
+					$sql .= $criteria . ' ' . $key . ' :' . $criteria . ' ';
+				}
+			} else
+				$sql .= $criteria . ' = :' . $criteria;
+		}
 		$limit = !empty($limit) ? 'limit ' . $limit : '';
-		$stmt = self::prepare("SELECT * FROM $tableName WHERE ". $sql . " ORDER BY " . $primary ." DESC " . $limit);
+		$stmt = self::prepare("SELECT * FROM `$tableName` WHERE ". $sql . " ORDER BY " . $primary ." DESC " . $limit);
 		foreach ($where as $key => $item) {
-			$stmt->bindValue(":$key", $item);
+			if (!is_array($item))
+				$stmt->bindValue(":$key", $item);
+			else {
+				foreach ($item as $handler => $value) {
+					$stmt->bindValue(":$key", $value);
+				}
+			}
 		}
 		$stmt->execute();
 
@@ -285,8 +330,8 @@ abstract class DbModel extends Model
 		$tableName = static::tableName();
 		$attributes = array_keys($where);
 		$sql = implode(" AND " ,array_map(fn($attr) => "$attr = :$attr", $attributes));
-		$stmt = !empty($where) ?    self::prepare("SELECT * FROM $tableName WHERE ". $sql) :
-									self::prepare("SELECT * FROM $tableName");
+		$stmt = !empty($where) ?    self::prepare("SELECT * FROM `$tableName` WHERE ". $sql) :
+									self::prepare("SELECT * FROM `$tableName`");
 		foreach ($where as $key => $item) {
 			$stmt->bindValue(":$key", $item);
 		}
@@ -299,8 +344,6 @@ abstract class DbModel extends Model
 
 	public function random($count = 1)
 	{
-		/** SELECT * FROM tbl AS t1 JOIN (SELECT id FROM tbl ORDER BY RAND() LIMIT 10) as t2 ON t1.id=t2.id */
-		/** SELECT * FROM users AS t1 JOIN (SELECT id FROM users ORDER BY RAND() LIMIT 10) as t2 ON t1.id=t2.id */
 		$tableName = static::tableName();
 		$primary = static::primaryKey();
 
@@ -313,6 +356,31 @@ abstract class DbModel extends Model
 		$stmt->execute();
 
 		return $stmt->fetchAll(2);
+	}
+
+	/** delete current object
+	 * @param int $confirm
+	 * @return bool
+	 */
+	public function delete(int $confirm = 0): bool
+	{
+		if ($confirm) {
+			$tableName = $this->tableName();
+			$entity = $this->getId();
+			$stmt = self::prepare('DELETE FROM `' . $tableName . '` WHERE ' . static::primaryKey() . ' = :primaryValue');
+
+			$stmt->bindValue(":primaryValue", $entity);
+
+			if ($stmt->execute()) {
+				foreach (static::attributes() as $attribute) {
+					unset($this->{$attribute});
+				}
+
+				return true;
+			}
+		}
+
+		return false;
 	}
 
     /**
@@ -333,7 +401,10 @@ abstract class DbModel extends Model
 	 */
 	public function __toString()
 	{
-		return (string)$this->getId();
+		if ($this->getId())
+			return (string)$this->getId();
+
+		return '-1';
 	}
 
 	/**
@@ -344,6 +415,8 @@ abstract class DbModel extends Model
 	 */
 	public function __call($name, $arguments)
 	{
+		if ($name == 'set')
+			die('here');
 		if (substr($name, 0, 3 ) === "get")
 		{
 			$name = lcfirst(ltrim($name, 'get'));
@@ -362,5 +435,26 @@ abstract class DbModel extends Model
 		}
 
 		throw new \BadMethodCallException('method ' . $name . ' does not exist in class ' . get_class($this));
+	}
+
+	/**
+	 * @return QueryBuilder
+	 */
+	public function queryBuilder(): QueryBuilder
+	{
+		if (property_exists($this, 'queryBuilder'))
+			return $this->queryBuilder;
+
+		$this->queryBuilder = new QueryBuilder(static::tableName(), static::primaryKey());
+
+		return $this->queryBuilder();
+	}
+
+	/**
+	 * @return array
+	 */
+	public function relationships(): array
+	{
+		return [];
 	}
 }
