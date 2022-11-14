@@ -16,15 +16,18 @@ class Select
 	public string $required;
 	public string $default;
 	public string $options;
+	private ?string $show;
+	private $elements;
 
-	public function __construct(Model $model, string $attribute, $elements)
+	public function __construct(Model $model, string $attribute, $elements, $show)
 	{
 		$this->model = $model;
 		$this->attribute = $attribute;
 		$this->disabled = '';
 		$this->required = '';
 		$this->default = '';
-		$this->options = $this->toString($elements);
+		$this->show = $show;
+		$this->elements = $elements;
 	}
 
 	public function __toString(): string
@@ -50,7 +53,7 @@ class Select
 			, $this->attribute
 			, $this->disabled
 			, $this->required
-			, $this->options
+			, $this->toString($this->elements)
 			, $this->model->getFirstError($this->attribute)
 		);
 	}
@@ -59,7 +62,7 @@ class Select
 	 * @param array|Model $elements
 	 * @return string
 	 */
-	public function toString($elements): string
+	public function toString(array|Model $elements): string
 	{
 		$string = '';
 
@@ -69,23 +72,30 @@ class Select
 
 			foreach ($options as $option) {
 				$string .= "<option value='" . $option[$primary] . "'";
-				$string .= $this->model->{$this->attribute} == $option[$primary] ? 'selected' : '';
-				$string .= ">" . $option[$this->attribute] . "</option>" . PHP_EOL;
+				$string .= $this->model->{'get' . ucfirst($this->attribute)}() == $option[$primary] ? 'selected' : '';
+				if ($this->show)
+					$string .= ">" . $option[$this->show] . "</option>" . PHP_EOL;
+				else
+					$string .= ">" . $option[$this->attribute] . "</option>" . PHP_EOL;
 			}
 		} else {
 			foreach ($elements as $value => $element) {
-				if ($this->model->{$this->attribute} == $value)
+				error_log('default: ' . gettype($this->default) . "\nvalue: " . $value . "\n", 3, '/var/www/camagru/runtime/logs/logs.log');
+				if ($this->default == $value || $this->model->{$this->attribute} == $value)
 					$string .= "<option value='" . $value . "' selected='selected'>" . $element . "</option>" . PHP_EOL;
 				else
 					$string .= "<option value='" . $value . "'>" . $element . "</option>" . PHP_EOL;
 			}
+			error_log("------------------------------\n", 3, '/var/www/camagru/runtime/logs/logs.log');
 		}
+
 
 		return $string;
 	}
 
 	/**
 	 * @param string $label
+	 * @return Select
 	 */
 	public function setLabel(string $label)
 	{
@@ -93,4 +103,11 @@ class Select
 
 		return $this;
 	}
+
+    public function setDefault(string $string)
+    {
+		$this->default = $string;
+
+		return $this;
+    }
 }
