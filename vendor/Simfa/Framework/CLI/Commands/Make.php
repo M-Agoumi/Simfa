@@ -54,9 +54,9 @@ class Make extends BaseCommand implements BaseCommandInterface
 			$name = readline();
 		}
 		$name = ucfirst($name);
-		if (!$this->endsWith($name, 'Controller') && !$this->endsWith($name, 'Controller'))
+		if (!$this->endsWith($name, 'Controller') && !$this->endsWith($name, 'controller'))
 			$name .= "Controller";
-		$name = str_replace('Controller', 'Controller', $name);
+		$name = str_replace('controller', 'Controller', $name);
 		echo "\x1b[32m" . $name . PHP_EOL;
 		return $name;
 	}
@@ -82,7 +82,7 @@ class Make extends BaseCommand implements BaseCommandInterface
 	private function makeController($controllerName)
 	{
 		/** generate view file name */
-		$viewFileName = substr(str_shuffle(md5(time())),0,8);
+		$viewFileName = $controllerName;
 		/** make Controller Content */
 		$controllerContent = $this->controllerContent($controllerName, $viewFileName);
 		$controller = fopen("src/Controller/" . $controllerName . ".php", "w");
@@ -95,7 +95,7 @@ class Make extends BaseCommand implements BaseCommandInterface
 		$this->makeView($viewFileName);
 
 		/** create Route */
-		$routesFile = CLIApplication::$app->root . 'routes/web.php';
+		$routesFile = CLIApplication::$ROOT_DIR . 'routes/web.php';
 		$route = "Simfa\Framework\Router::get('/" . $viewFileName . "', [\Controller\\" . $controllerName .  "::class, 'index']);";
 		file_put_contents($routesFile, $route.PHP_EOL , FILE_APPEND | LOCK_EX);
 		echo 'Controller created'. PHP_EOL;
@@ -112,7 +112,7 @@ class Make extends BaseCommand implements BaseCommandInterface
 	private function controllerContent(string $controllerName, string $view): string
 	{
 		/** @var string $template get class template and stop script in case it weren't found */
-		$templateFileName = CLIApplication::$app->root . 'vendor/Simfa/Views/Commands/templates/controller.template';
+		$templateFileName = CLIApplication::$ROOT_DIR . 'vendor/Simfa/Views/Commands/templates/controller.template';
 		$template = file_exists($templateFileName) ? file_get_contents($templateFileName) : false;
 
 		if (!$template)
@@ -149,13 +149,19 @@ class Make extends BaseCommand implements BaseCommandInterface
 
 	private function makeView($viewFileName)
 	{
-		$templateFileName = CLIApplication::$app->root . 'vendor/Simfa/Views/Commands/templates/default_view.template';
+		$templateFileName = CLIApplication::$ROOT_DIR . 'vendor/Simfa/Views/Commands/templates/default_view.template';
 		$template = file_exists($templateFileName) ? file_get_contents($templateFileName) : false;
 
 		if (!$template)
 			die(RED . 'an essential file for this command is not found. file name: ' . $templateFileName . PHP_EOL . RESET);
 
-		$view = fopen("views/templates/" . $viewFileName . ".gaster.php", "w");
+		$viewFileName = str_replace('Controller', '', $viewFileName);
+		$dirname = CLIApplication::$ROOT_DIR . 'views/templates/' . $viewFileName;
+		if (!is_dir($dirname))
+		{
+			mkdir($dirname, 0755, true);
+		}
+		$view = fopen($dirname . "/index.gaster.php", "w");
 
 		/** write the controller content to the controller file */
 		fwrite($view, $template);

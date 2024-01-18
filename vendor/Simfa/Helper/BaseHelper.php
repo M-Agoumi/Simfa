@@ -1,5 +1,6 @@
 <?php
 
+use JetBrains\PhpStorm\NoReturn;
 use Simfa\Framework\Application;
 
 if (! function_exists('asset')) {
@@ -69,5 +70,25 @@ if (! function_exists('path')) {
 	function path(string $path, $var = null): string
 	{
 		return Application::$APP->path($path, $var);
+	}
+}
+
+if (!function_exists('dd')) {
+
+	#[NoReturn] function dd(mixed $data):void
+	{
+		echo "<pre style='background:#1d1d1d; color: greenyellow; position:absolute; left: 0; top: 0; z-index: 9999999; width: 100%;'>";
+		print_r($data);
+		echo '<pre>';
+		die();
+	}
+
+}
+
+if (!function_exists('d')) {
+	function d()
+	{
+		$args = func_get_args();
+		call_user_func_array('dump', $args);
 	}
 }

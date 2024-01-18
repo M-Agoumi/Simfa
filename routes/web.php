@@ -12,3 +12,10 @@
   * });
   *
   */
+
+use Controller\TestController;
+use Simfa\Framework\Router;
+
+Router::magic("/tested/{dynamic}", function ($dynamic) {var_dump($dynamic);die;});
+Router::get('/test', function () {die('test');});
+Router::get('/TestController', [TestController::class, 'index']);

@@ -48,8 +48,6 @@ abstract class Controller
      */
     public function getMiddlewares(): array
     {
-    	array_push($this->middlewares, New FirewallMiddleware());
-
         return $this->middlewares;
     }
 

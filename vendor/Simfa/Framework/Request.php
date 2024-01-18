@@ -120,9 +120,9 @@ class Request
 	}
 
 	/**
-	 * @return array|bool
+	 * @return bool|array|callable
 	 */
-	public function magicPath(): bool|array
+	public function magicPath(): bool|array|callable
 	{
 		$routes = $this->getRoutes();
 		$path = $this->getMagicPath($this->getPath());
@@ -133,7 +133,9 @@ class Request
 				$return = $value[$path];
 
 				if (is_array($return))
-					array_push($return, $this->getPathVar());
+					$return[] = $this->getPathVar();
+				else
+					$return = [$return, $this->getPathVar()];
 				break;
 			}
 		}

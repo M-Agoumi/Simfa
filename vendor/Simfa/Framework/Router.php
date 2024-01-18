@@ -234,6 +234,10 @@ class Router
 	 */
 	protected function execArrayCallback($callback)
 	{
+		// is it a closure?
+		if (is_callable($callback[0]))
+			return $callback[0]($callback[1]);
+		// it is a controller then
 		/** @var Controller $controller */
 		$controller = new $callback[0]();
 		Application::$APP->controller = $controller;

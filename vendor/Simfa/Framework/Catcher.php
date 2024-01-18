@@ -15,8 +15,6 @@ class Catcher
 
 	public function catch(Exception $e)
 	{
-		$this->app->response->setStatusCode($e->getCode());
-
 		if ($this->app->interface == 'API')
 			return $this->apiLog($e);
 		elseif ($this->app->interface == 'CLI')
